@@ -7,10 +7,12 @@ import shutil
 import sys
 import time
 
-
 import skimage.exposure
 import numpy as np
 
+
+SUBDATASET_PATTERN = re.compile('[0-9]{2}_[0-9]{2}_[0-9]{2}')
+ROA_PATTERN = re.compile('[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{12}')
 
 #TODO: Rename subdataset to version_subset
 #TODO: Create subset class
@@ -52,30 +54,6 @@ def dname_to_version(string):
         str(int(char))
         for char in string.split('_') if char.isdigit()
         ])
-
-
-class Game:
-    FRAMES_PER_SECOND = 60.0
-    SUBDATASET_PATTERN = re.compile('[0-9]{2}_[0-9]{2}_[0-9]{2}')
-    ROA_PATTERN = re.compile('[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{12}')
-
-    class State(enum.Enum):
-        SPLASH_SCREEN = enum.auto()
-        MAIN_MENU = enum.auto()
-        REPLAY_MENU = enum.auto()
-        REPLAY_PLAYBACK = enum.auto()
-        CHARACTER_SELECTION = enum.auto()
-        STAGE_SELECTION = enum.auto()
-        GAMEPLAY = enum.auto()
-
-    class Sequence:
-        '''The first element is the default delay between key presses, and all
-        subsequent elements are either key names or timed delays.'''
-        splash_to_main = [1.5, 'Z', 'X', 'Z', 'Z', 'Z', 'Z']
-        main_to_replay = [0.5, 'DOWN', 'DOWN', 'DOWN', 'Z', 1, 'Z']
-        start_replay_1 = [1, 'Z', 'Z', 0]
-        back_and_forth = [1, 'X', 'Z']
-        end_postreplay = [2, 6, 'Z', 'Z', 3]
 
 
 class ReplayManager:
