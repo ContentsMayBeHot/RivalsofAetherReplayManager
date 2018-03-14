@@ -26,20 +26,20 @@ def main():
     cmd = args[1].lower()
 
     manager = ReplayManager()
-    if cmd == 'sort':
+    if cmd == '--sort-replays':
         manager.sort_roas_into_subdatasets()
-    elif cmd == 'sample':
+    elif cmd == '--make-sets':
         manager.make_ml_sets()
-    elif cmd == 'test-sample':
+    elif cmd == '--make-sample':
         manager.make_random_test_sample()
     else:
         print_help()
 
 def print_help():
     print('Rivals of Aether Replay Manager:')
-    print(' SORT        - Sort replay files by game version')
-    print(' SAMPLE      - Create training and testing sets')
-    print(' TEST-SAMPLE - Create random sample for validation')
+    print(' --sort-replays | Sort replay files by game version')
+    print(' --make-sets    | Create training and testing sets')
+    print(' --make-sample  | Create random sample')
 
 def version_to_dname(string):
     '''Convert x.x.x to xx_xx_xx'''
@@ -110,7 +110,8 @@ class ReplayManager:
             if os.path.isdir(os.path.join(self.frames_apath, dirent))
             ]
         random_batch = np.random.choice(dataset, sample_size, replace=False)
-        self.__copy_batch_into_set__(random_batch, random_set_apath)
+        print('Made random batch of size', len(random_batch))
+        self.__transfer_batch_into_set__(random_batch, random_set_apath)
 
     def make_ml_sets(self):
         # Ensure directories for training and testing sets
@@ -128,21 +129,23 @@ class ReplayManager:
         random = np.random.choice([True, False], len(dataset), p=[0.80, 0.20])
         for x,r in zip(dataset, random):
             if r:
-                training_set.append(r)
+                training_set.append(x)
             else:
-                testing_set.append(r)
-        self.__copy_batch_into_set__(training_set, training_set_apath)
-        self.__copy_batch_into_set__(testing_set, testing_set_apath)
+                testing_set.append(x)
+        print('Made training batch of size', len(training_set))
+        print('Made testing batch of size', len(testing_set))
+        self.__transfer_batch_into_set__(training_set, training_set_apath)
+        self.__transfer_batch_into_set__(testing_set, testing_set_apath)
 
 
     def __ensure_directory_exists__(self, apath):
         if not os.path.isdir(apath):
             os.mkdir(apath)
 
-    def __copy_batch_into_set__(self, batch, dst_root):
+    def __transfer_batch_into_set__(self, batch, dst_root, copy=False):
         n = len(batch)
         for i,roa_dname in enumerate(batch):
-            print('Copying', roa_dname, 'into set [{}/{}]'.format(i+1,n))
+            print('Transferring', roa_dname, 'into set [{}/{}]'.format(i+1,n))
             # Establish paths
             frames_src = os.path.join(self.frames_apath, roa_dname)
             frames_dst = os.path.join(dst_root, 'frames', roa_dname)
@@ -150,9 +153,15 @@ class ReplayManager:
             labels_dst = os.path.join(dst_root, 'labels', roa_dname)
             if os.path.isdir(frames_dst) or os.path.isdir(labels_dst):
                 continue
-            # Copy
-            shutil.copytree(frames_src, frames_dst, symlinks=False, ignore=None)
-            shutil.copytree(labels_src, labels_dst, symlinks=False, ignore=None)
+            # Transfer files
+            if copy:
+                shutil.copytree(frames_src, frames_dst,
+                                symlinks=False, ignore=None)
+                shutil.copytree(labels_src, labels_dst,
+                                symlinks=False, ignore=None)
+            else:
+                shutil.move(frames_src, frames_dst)
+                shutil.move(labels_src, labels_dst)
 
     def load_subdataset(self):
         '''Purpose: Load the subdataset for a particular game version
