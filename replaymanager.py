@@ -111,7 +111,7 @@ class ReplayManager:
             ]
         random_batch = np.random.choice(dataset, sample_size, replace=False)
         print('Made random batch of size', len(random_batch))
-        self.__transfer_batch_into_set__(random_batch, random_set_apath)
+        self.__transfer_batch_into_set__(random_batch, random_set_apath, copy=True)
 
     def make_ml_sets(self):
         # Ensure directories for training and testing sets
