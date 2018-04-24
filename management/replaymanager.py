@@ -5,17 +5,16 @@ import random
 import re
 import shutil
 import sys
-import time
 
 import skimage.exposure
 import numpy as np
 
+from playbacktimer import PlaybackTimer
+import utilites as utls
+
 
 SUBDATASET_PATTERN = re.compile('[0-9]{2}_[0-9]{2}_[0-9]{2}')
 ROA_PATTERN = re.compile('[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{12}')
-
-#TODO: Rename subdataset to version_subset
-#TODO: Create subset class
 
 
 def main():
@@ -41,19 +40,72 @@ def print_help():
     print(' --make-sets    | Create training and testing sets')
     print(' --make-sample  | Create random sample')
 
-def version_to_dname(string):
-    '''Convert x.x.x to xx_xx_xx'''
-    return '_'.join([
-        char if len(char) > 1 else '0' + char
-        for char in string.split('.') if char.isdigit()
-        ])
 
-def dname_to_version(string):
-    '''Convert xx_xx_xx to x.x.x'''
-    return '.'.join([
-        str(int(char))
-        for char in string.split('_') if char.isdigit()
-        ])
+class ReplayFile:
+    def __init__(self, replay_path):
+        self.__id = os.path.basename(replay_path)
+        self.__src = os.path.abspath(replay_path)
+
+    @property
+    def name():
+        return str(self.__name)
+
+    @property
+    def path():
+        return str(self.__path)
+
+
+class ReplayCollection:
+    def __init__(self, collection_path, frames_path, labels_path):
+        self.__id = os.path.dirname(collection_path)
+        self.__src = os.path.abspath(collection_path)
+        self.__dest_x = os.path.abspath(frames_path)
+        self.__dest_y = os.path.abspath(labels_path)
+        utls.ensure_directory_exists(self.__dest_x)
+        utls.ensure_directory_exists(self.__dest_y)
+        self.__src_replays = [
+            ReplayFile(os.path.join(self.__src, fname))
+            for fname in utls.listdir_replays_only(self.__src)
+            ]
+        self.reset_unvisited()
+
+    def reset_unvisited(self):
+        self.__src_replays_unvisited = [
+            r for r in self.__src_replays if not self.__is_replay_collected__(r)
+        ]
+
+    def is_replay_collected(self, replay):
+        replay_dest_x = os.path.join(self.__dest_x, replay.name)
+        replay_dest_y = os.path.join(self.__dest_y, replay.name)
+        if not os.path.isdir(replay_dest_x):
+            return False
+        if not os.path.isdir(replay_dest_y):
+            return False
+        if not os.listdir(replay_dest_x):
+            return False
+        if not os.listdir(replay_dest_y):
+            return False
+        return True
+
+    def get_count(self):
+        return len(self.__src_replays)
+
+    def get_unvisited_count(self):
+        return len(self.__src_replays_unvisited)
+
+    def get_replay_at(self, index):
+        return self.__src_replays[index]
+    
+    def get_replay_by_name(self, name):
+        matches = [ r for r in self.__src_replays if r.name == name ]
+        if not matches:
+            return None
+        return matches[0]
+
+    def visit_next_replay(self):
+        if not self.__src_replays_unvisited:
+            return None
+        return self.__src_replays_unvisited.pop(0)
 
 
 class ReplayManager:
@@ -61,18 +113,18 @@ class ReplayManager:
         '''Sets up a new replay manager'''
         # Open the configuration file
         self.config = configparser.ConfigParser()
-        config_dname = os.path.abspath(os.path.dirname(__file__))
-        config_apath = os.path.join(config_dname, 'roa.ini')
-        self.config.read(config_apath)
+        config_path = os.path.join(
+                os.path.abspath(os.path.dirname(__file__)), 'roa.ini')
+        self.config.read(config_path)
         # Establish data paths
         self.replays_apath = self.config['RivalsofAether']['PathToReplays']
         self.frames_apath = os.path.join(self.replays_apath, 'frames')
         self.sets_path = os.path.join(self.replays_apath, 'sets')
         self.labels_apath = os.path.join(self.replays_apath, 'labels')
         # Ensure data paths exist
-        self.__ensure_directory_exists__(self.frames_apath)
-        self.__ensure_directory_exists__(self.labels_apath)
-        self.__ensure_directory_exists__(self.sets_path)
+        utls.ensure_directory_exists()__(self.frames_apath)
+        utls.ensure_directory_exists()__(self.labels_apath)
+        utls.ensure_directory_exists()__(self.sets_path)
 
     def sort_roas_into_subdatasets(self):
         '''Purpose: Sort .roa files by version into subdatasets
@@ -103,7 +155,7 @@ class ReplayManager:
     def make_random_test_sample(self, sample_size=10):
         # Ensure directory for random sample
         random_set_apath = os.path.join(self.sets_path, 'random')
-        self.__ensure_directory_exists__(random_set_apath)
+        utls.ensure_directory_exists()__(random_set_apath)
         # Create random subset
         dataset = [
             dirent for dirent in os.listdir(self.frames_apath)
@@ -117,8 +169,8 @@ class ReplayManager:
         # Ensure directories for training and testing sets
         training_set_apath = os.path.join(self.sets_path, 'training')
         testing_set_apath = os.path.join(self.sets_path, 'testing')
-        self.__ensure_directory_exists__(training_set_apath)
-        self.__ensure_directory_exists__(testing_set_apath)
+        utls.ensure_directory_exists()__(training_set_apath)
+        utls.ensure_directory_exists()__(testing_set_apath)
         # Establish training and testing sets with probability distribution
         dataset = [
             dirent for dirent in os.listdir(self.frames_apath)
@@ -136,11 +188,6 @@ class ReplayManager:
         print('Made testing batch of size', len(testing_set))
         self.__transfer_batch_into_set__(training_set, training_set_apath)
         self.__transfer_batch_into_set__(testing_set, testing_set_apath)
-
-
-    def __ensure_directory_exists__(self, apath):
-        if not os.path.isdir(apath):
-            os.mkdir(apath)
 
     def __transfer_batch_into_set__(self, batch, dst_root, copy=False):
         n = len(batch)
@@ -212,9 +259,9 @@ class ReplayManager:
         # Ensure the existence of a frames and labels folders for this replay
         self.roa_dname = os.path.splitext(self.roa_fname)[0]
         self.roa_frames_apath = os.path.join(self.frames_apath, self.roa_dname)
-        self.__ensure_directory_exists__(self.roa_frames_apath)
+        utls.ensure_directory_exists()__(self.roa_frames_apath)
         self.roa_labels_apath = os.path.join(self.labels_apath, self.roa_dname)
-        self.__ensure_directory_exists__(self.roa_labels_apath)
+        utls.ensure_directory_exists()__(self.roa_labels_apath)
         # Return absolute path to this replay file
         print('Fetching replay file "{}"'.format(self.roa_fname))
         return self.roa_apath
@@ -291,34 +338,6 @@ class ReplayManager:
             if os.listdir(roa_labels_apath):
                 labels = True
         return frames and labels
-
-
-class PlaybackTimer:
-    def start(self, duration):
-        '''Hit the clock'''
-        self.start_time = time.time()
-        self.duration = duration
-        self.end_time = self.start_time +  duration
-
-    def is_playing(self):
-        '''Returns true if the replay is still playing'''
-        return time.time() < self.end_time
-
-    def seconds_elapsed(self):
-        '''Returns the number of seconds elapsed now'''
-        return self.seconds_elapsed_since(time.time())
-
-    def seconds_elapsed_since(self, timestamp):
-        '''Returns the number of seconds elapsed for a particular time'''
-        return timestamp - self.start_time
-
-    def seconds_remaining(self):
-        '''Returns the number of seconds remaining now'''
-        return self.seconds_remaining_after(time.time())
-
-    def seconds_remaining_after(self, timestamp):
-        '''Returns the number of seconds remaining for a particular time'''
-        return self.end_time - timestamp
 
 
 if __name__ == '__main__':
